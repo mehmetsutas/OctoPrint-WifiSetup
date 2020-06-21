@@ -35,7 +35,7 @@ Without that daemon setup on the system serving as your OctoPrint host, the plug
 
 After that, just install the plugin like you would install any regular Python package from source:
 
-    pip install https://github.com/OctoPrint/OctoPrint-Netconnectd/archive/master.zip
+    pip install https://github.com/msutas/OctoPrint-Netconnectd/archive/master.zip
 
 Make sure you use the same Python environment that you installed OctoPrint under, otherwise the plugin won't be able
 to satisfy its dependencies.
