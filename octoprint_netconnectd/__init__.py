@@ -1,5 +1,11 @@
 # coding=utf-8
 from __future__ import absolute_import
+import subprocess
+import os
+import time
+from threading import Thread
+import fileinput
+import re
 
 __author__ = "Gina Häußge <osd@foosel.net>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
@@ -12,6 +18,8 @@ from flask import jsonify, make_response
 import octoprint.plugin
 
 from octoprint.server import admin_permission
+from octoprint.access import ADMIN_GROUP, USER_GROUP
+from octoprint.access.permissions import Permissions
 
 class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
                                 octoprint.plugin.TemplatePlugin,
@@ -20,9 +28,21 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 
 	def __init__(self):
 		self.address = None
+		
+	# Additional permissions hook
 
 	def initialize(self):
 		self.address = self._settings.get(["socket"])
+
+	def get_additional_permissions(self):
+		return [
+			dict(key="ACCESS",
+			     name="WIFI Setup Access",
+			     description=gettext("Allows access to WIFI setup"),
+			     roles=["access"],
+			     dangerous=True,
+			     default_groups=[USER_GROUP])
+		]
 
 	@property
 	def hostname(self):
@@ -124,67 +144,109 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 	##~~ Private helpers
 
 	def _get_wifi_list(self, force=False):
-		payload = dict()
-		if force:
-			self._logger.info("Forcing wifi refresh...")
-			payload["force"] = True
+        iwlist_raw = subprocess.Popen(['sudo', '/sbin/iwlist', 'scan'], stdout=subprocess.PIPE)
+        ap_list, err = iwlist_raw.communicate()
+        retcode = iwlist_raw.poll()
+        if retcode:
+		    self._logger.info("Error while listing wifi: retcode = " + retcode)
 
-		flag, content = self._send_message("list_wifi", payload)
-		if not flag:
-			raise RuntimeError("Error while listing wifi: " + content)
+        result = []
 
-		result = []
-		for wifi in content:
-			result.append(dict(ssid=wifi["ssid"], address=wifi["address"], quality=wifi["signal"], encrypted=wifi["encrypted"]))
+        for line in ap_list.decode('utf-8').rsplit('\n'):
+		    if 'Address' in line:
+			    ap_address = line[29:]
+		    if 'level' in line:
+			    ap_quality = line[48:51]
+		    if 'Encryption' in line:
+			    ap_encryption = line[35:]
+            if 'ESSID' in line:
+                ap_ssid = line[27:-1]
+                result.append(dict(ssid=ap_ssid, address=ap_address, quality=ap_quality, encrypted=ap_encryption))
+
 		return result
+		
 
 	def _get_status(self):
-		payload = dict()
+        mac_addr_pattern = r"[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}"
+        iwconfig_re = re.compile('ESSID:"(?P<ssid>[^"]+)".*Access Point: (?P<address>%s).*' % mac_addr_pattern , re.DOTALL)
 
-		flag, content = self._send_message("status", payload)
-		if not flag:
-			raise RuntimeError("Error while querying status: " + content)
+        iwconfig_run = subprocess.Popen(['sudo', '/sbin/iwconfig', 'wlan0'])
+        iwconfig_output, err = iwlist_raw.communicate()
+        retcode = iwlist_raw.poll()
+        if retcode:
+		    self._logger.info("Error while checking status: retcode = " + retcode)
+            return None, None
 
-		return content
+        m = iwconfig_re.search(iwconfig_output)
+        if not m:
+            return None, None
+
+        return m.group('ssid'), m.group('address')
 
 	def _configure_and_select_wifi(self, ssid, psk, force=False):
-		payload = dict(
-			ssid=ssid,
-			psk=psk,
-			force=force
-		)
+	
+        temp_conf_file = open('wpa_supplicant.conf.tmp', 'w')
 
-		flag, content = self._send_message("config_wifi", payload)
-		if not flag:
-			raise RuntimeError("Error while configuring wifi: " + content)
+        temp_conf_file.write('ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n')
+        temp_conf_file.write('update_config=1\n')
+        temp_conf_file.write('\n')
+        temp_conf_file.write('network={\n')
+        temp_conf_file.write('	ssid="' + ssid + '"\n')
 
-		flag, content = self._send_message("start_wifi", dict())
-		if not flag:
-			raise RuntimeError("Error while selecting wifi: " + content)
+        if psk == '':
+            temp_conf_file.write('	key_mgmt=NONE\n')
+        else:
+            temp_conf_file.write('	psk="' + psk + '"\n')
 
+        temp_conf_file.write('	}')
+
+        temp_conf_file.close
+
+        os.system('mv wpa_supplicant.conf.tmp /etc/wpa_supplicant/wpa_supplicant.conf')
+		time.sleep(1)
+        os.system('sudo wpa_cli -i wlan0 reconfigure')
+		
+        os.system('ifconfig wlan0 down')
+		time.sleep(2)
+        os.system('ifconfig wlan0 up')
+	
 	def _forget_wifi(self):
-		payload = dict()
-		flag, content = self._send_message("forget_wifi", payload)
-		if not flag:
-			raise RuntimeError("Error while forgetting wifi: " + content)
+        temp_conf_file = open('wpa_supplicant.conf.tmp', 'w')
+
+        temp_conf_file.write('ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n')
+        temp_conf_file.write('update_config=1\n')
+        temp_conf_file.write('\n')
+
+        temp_conf_file.close
+
+        os.system('mv wpa_supplicant.conf.tmp /etc/wpa_supplicant/wpa_supplicant.conf')
+		time.sleep(1)
+        os.system('sudo wpa_cli -i wlan0 reconfigure')
+		
+        os.system('ifconfig wlan0 down')
+		time.sleep(2)
+        os.system('ifconfig wlan0 up')
 
 	def _reset(self):
-		payload = dict()
-		flag, content = self._send_message("reset", payload)
-		if not flag:
-			raise RuntimeError("Error while factory resetting netconnectd: " + content)
+        os.system('sudo wpa_cli -i wlan0 reconfigure')
+		
+        os.system('ifconfig wlan0 down')
+		time.sleep(2)
+        os.system('ifconfig wlan0 up')
 
 	def _start_ap(self):
-		payload = dict()
-		flag, content = self._send_message("start_ap", payload)
-		if not flag:
-			raise RuntimeError("Error while starting ap: " + content)
+        os.system('sudo wpa_cli -i wlan0 reconfigure')
+		
+        os.system('ifconfig wlan0 down')
+		time.sleep(2)
+        os.system('ifconfig wlan0 up')
 
 	def _stop_ap(self):
-		payload = dict()
-		flag, content = self._send_message("stop_ap", payload)
-		if not flag:
-			raise RuntimeError("Error while stopping ap: " + content)
+        os.system('sudo wpa_cli -i wlan0 reconfigure')
+		
+        os.system('ifconfig wlan0 down')
+		time.sleep(2)
+        os.system('ifconfig wlan0 up')
 
 	def _send_message(self, message, data):
 		obj = dict()
@@ -233,6 +295,15 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 			sock.close()
 
 __plugin_name__ = "Netconnectd Client"
+__plugin_author__ = "Gina Häußge & Mehmet Sutas"
+__plugin_description__ = "Setup wifi credentiials"
+__plugin_disabling_discouraged__ = gettext("Without this plugin you will no longer be able to setup "
+                                           "wifi credentials through Octoprint UI.")
+__plugin_license__ = "AGPLv3"
+#__plugin_implementation__ = BackupPlugin()
+__plugin_hooks__ = {
+	"octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
+}
 
 def __plugin_check__():
 	import sys
