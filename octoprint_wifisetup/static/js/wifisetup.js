@@ -1,5 +1,5 @@
 $(function() {
-    function NetconnectdViewModel(parameters) {
+    function WifisetupViewModel(parameters) {
         var self = this;
 
         self.loginState = parameters[0];
@@ -84,7 +84,7 @@ $(function() {
         );
 
         self.getEntryId = function(data) {
-            return "settings_plugin_netconnectd_wifi_" + md5(data.ssid);
+            return "settings_plugin_wifisetup_wifi_" + md5(data.ssid);
         };
 
         self.refresh = function() {
@@ -163,7 +163,7 @@ $(function() {
             self.editorWifiPassphrase1(undefined);
             self.editorWifiPassphrase2(undefined);
             if (data.encrypted) {
-                $("#settings_plugin_netconnectd_wificonfig").modal("show");
+                $("#settings_plugin_wifisetup_wificonfig").modal("show");
             } else {
                 self.confirmWifiConfiguration();
             }
@@ -175,7 +175,7 @@ $(function() {
                 self.editorWifiSsid(undefined);
                 self.editorWifiPassphrase1(undefined);
                 self.editorWifiPassphrase2(undefined);
-                $("#settings_plugin_netconnectd_wificonfig").modal("hide");
+                $("#settings_plugin_wifisetup_wificonfig").modal("hide");
             });
         };
 
@@ -241,7 +241,7 @@ $(function() {
             var payload = _.extend(data, {command: command});
 
             var params = {
-                url: API_BASEURL + "plugin/netconnectd",
+                url: API_BASEURL + "plugin/wifisetup",
                 type: "POST",
                 dataType: "json",
                 data: JSON.stringify(payload),
@@ -271,7 +271,7 @@ $(function() {
             }
 			
             $.ajax({
-                url: API_BASEURL + "plugin/netconnectd",
+                url: API_BASEURL + "plugin/wifisetup",
                 type: "GET",
                 dataType: "json",
                 success: self.fromResponse
@@ -307,10 +307,9 @@ $(function() {
     }
 
     // view model class, parameters for constructor, container to bind to
-//ADDITIONAL_VIEWMODELS.push([NetconnectdViewModel, ["loginStateViewModel", "settingsViewModel"], "#settings_plugin_netconnectd"]);
     OCTOPRINT_VIEWMODELS.push({
-        construct: NetconnectdViewModel,
+        construct: WifisetupViewModel,
         dependencies: ["loginStateViewModel", "settingsViewModel"],
-        elements: ["#settings_plugin_netconnectd", "#tab_plugin_netconnectd"]
+        elements: ["#settings_plugin_wifisetup", "#tab_plugin_wifisetup"]
     });
 });

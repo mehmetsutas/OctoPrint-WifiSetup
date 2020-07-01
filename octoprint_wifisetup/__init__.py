@@ -24,7 +24,7 @@ from octoprint.server import user_permission
 from octoprint.access import ADMIN_GROUP, USER_GROUP
 from octoprint.access.permissions import Permissions
 
-class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
+class WifisetupSettingsPlugin(octoprint.plugin.SettingsPlugin,
                                 octoprint.plugin.TemplatePlugin,
                                 octoprint.plugin.SimpleApiPlugin,
                                 octoprint.plugin.AssetPlugin):
@@ -60,7 +60,6 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_settings_defaults(self):
         return dict(
-            #socket="/var/run/netconnectd.sock",
             hostname=None,
             timeout=10
         )
@@ -82,12 +81,9 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
             forget_wifi=[]
         )
 
-#    def is_api_adminonly(self):
-#        return False
-
     def on_api_get(self, request):
 
-#        if not Permissions.PLUGIN_OCTOPRINT_NETCONNECTD_ACCESS.can():
+#        if not Permissions.PLUGIN_OCTOPRINT_WIFISETUP_ACCESS.can():
 #            return make_response("Insufficient rights", 403)
             
         status = self._get_status()
@@ -106,7 +102,7 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 #        if not admin_permission.can():
 #            return make_response("Insufficient rights", 403)
 
-        if not Permissions.PLUGIN_NETCONNECTD_ACCESS.can():
+        if not Permissions.PLUGIN_WIFISETUP_ACCESS.can():
             return None
 
         if command == "refresh_wifi":
@@ -129,15 +125,15 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
 
     def get_assets(self):
         return dict(
-            js=["js/netconnectd.js"],
-            css=["css/netconnectd.css"],
-            less=["less/netconnectd.less"]
+            js=["js/wifisetup.js"],
+            css=["css/wifisetup.css"],
+            less=["less/wifisetup.less"]
         )
 
     ##~~ Private helpers
 
     def _get_wifi_list(self, force=False):
-#        if not Permissions.PLUGIN_OCTOPRINT_NETCONNECTD_ACCESS.can():
+#        if not Permissions.PLUGIN_OCTOPRINT_WIFISETUP_ACCESS.can():
 #            return None
         iwlist_raw = subprocess.Popen(['sudo', '/sbin/iwlist', 'scan'], stdout=subprocess.PIPE)
         ap_list, err = iwlist_raw.communicate()
@@ -231,15 +227,31 @@ class NetconnectdSettingsPlugin(octoprint.plugin.SettingsPlugin,
         time.sleep(2)
         
         wpacli_run = subprocess.Popen(['/sbin/wpa_cli', '-i', 'wlan0', 'reconfigure'], stdout=subprocess.PIPE)
+        
+	def get_update_information(self):
+		return dict(
+			resource_monitor=dict(
+				displayName="Wifi Setup",
+				displayVersion=self._plugin_version,
 
-__plugin_name__ = "Netconnectd Client"
-__plugin_author__ = "Gina Häußge & Mehmet Sutas"
-__plugin_description__ = "Setup wifi credentiials"
+				type="github_release",
+				user="msutas",
+				repo="OctoPrint-WifiSetup",
+				current=self._plugin_version,
+
+				pip="https://github.com/msutas/OctoPrint-WifiSetup/archive/{target_version}.zip"
+			)
+		)
+
+__plugin_name__ = "WIFI SETUP"
+__plugin_author__ = "Mehmet Sutas"
+__plugin_pythoncompat__ = ">=2.7,<3"
+__plugin_description__ = "Setup wifi credentials"
 __plugin_disabling_discouraged__ = gettext("Without this plugin you will no longer be able to setup "
                                            "wifi credentials through Octoprint UI.")
 __plugin_license__ = "AGPLv3"
 
-__plugin_implementation__ = NetconnectdSettingsPlugin()
+__plugin_implementation__ = WifisetupSettingsPlugin()
 __plugin_hooks__ = {
                         "octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
                         }
@@ -248,18 +260,5 @@ def __plugin_check__():
     if sys.platform == 'linux2':
         return True
 
-    logging.getLogger("octoprint.plugins." + __name__).warn("The netconnectd plugin only supports Linux")
+    logging.getLogger("octoprint.plugins." + __name__).warn("The wifisetup plugin only supports Linux")
     return False
-
-#def __plugin_load__():
-    # since we depend on a Linux environment, we instantiate the plugin implementation here since this will only be
-    # called if the OS check above was successful
-#    global __plugin_implementation__
-#    __plugin_implementation__ = NetconnectdSettingsPlugin()
-#    __plugin_hooks__ = {
-#                        "octoprint.access.permissions": __plugin_implementation__.get_additional_permissions
-#                        }
-#    return True
-
-
-

@@ -1,6 +1,6 @@
-recursive-include octoprint_netconnectd/static *
-recursive-include octoprint_netconnectd/templates *
-recursive-include octoprint_netconnectd/translations *
+recursive-include octoprint_wifisetup/static *
+recursive-include octoprint_wifisetup/templates *
+recursive-include octoprint_wifisetup/translations *
 include LICENSE
 include requirements.txt
 include README.md
