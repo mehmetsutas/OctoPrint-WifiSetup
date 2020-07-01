@@ -44,29 +44,12 @@ $(function() {
             var text;
 
             if (self.error()) {
-                text = gettext("Error while talking to netconnectd, is the service running?");
-            } else if (self.status.connections.ap()) {
-                text = gettext("Acting as access point");
-            } else if (self.status.link()) {
-                if (self.status.connections.wired()) {
-                    text = gettext("Connected via wire");
-                } else if (self.status.connections.wifi()) {
-                    if (self.status.wifi.current_ssid()) {
-                        text = _.sprintf(gettext("Connected via wifi (SSID \"%(ssid)s\")"), {ssid: self.status.wifi.current_ssid()});
-                    } else {
-                        text = gettext("Connected via wifi (unknown SSID)")
-                    }
-                } else {
-                    text = gettext("Connected (unknown connection)");
-                }
-            } else {
-                text = gettext("Not connected to network");
-            }
-
-            if (!self.status.wifi.present()) {
-                text += ", " + gettext("no wifi interface present")
-            }
-
+                text = gettext("Hata!");
+            } else if (self.status.wifi.current_ssid()) {
+                text = _.sprintf(gettext("WIFI bağlantısı mevcut. (SSID \"%(ssid)s\")"), {ssid: self.status.wifi.current_ssid()});
+			} else {
+                text = gettext("WIFI bağlantısı yok.");
+			}
             return text;
         });
 
@@ -74,9 +57,6 @@ $(function() {
             return (!(self.error()));
         });
 
-        self.apRunning = ko.computed(function() {
-            return self.status.connections.ap();
-        });
 
         // initialize list helper
         self.listHelper = new ItemListHelper(
@@ -121,18 +101,18 @@ $(function() {
 
             self.hostname(response.hostname);
 
-            self.status.link(response.status.link);
-            self.status.connections.ap(response.status.connections.ap);
-            self.status.connections.wifi(response.status.connections.wifi);
-            self.status.connections.wired(response.status.connections.wired);
-            self.status.wifi.current_ssid(response.status.wifi.current_ssid);
-            self.status.wifi.current_address(response.status.wifi.current_address);
-            self.status.wifi.present(response.status.wifi.present);
-
+            self.status.link(false);
+            self.status.connections.ap(false);
+            self.status.connections.wifi(response.status.ssid);
+            self.status.connections.wired(false);
+            self.status.wifi.current_ssid(response.status.ssid);
+            self.status.wifi.current_address(response.status.address);
+            self.status.wifi.present(response.wificheck);
+			
             self.statusCurrentWifi(undefined);
-            if (response.status.wifi.current_ssid && response.status.wifi.current_address) {
+            if (response.status.ssid && response.status.address) {
                 _.each(response.wifis, function(wifi) {
-                    if (wifi.ssid == response.status.wifi.current_ssid && wifi.address.toLowerCase() == response.status.wifi.current_address.toLowerCase()) {
+                    if (wifi.ssid == response.status.ssid && wifi.address.toLowerCase() == response.status.address.toLowerCase()) {
                         self.statusCurrentWifi(self.getEntryId(wifi));
                     }
                 });
@@ -176,8 +156,8 @@ $(function() {
         };
 
         self.configureWifi = function(data) {
-            if (!self.loginState.isAdmin()) return;
-
+            //if (!self.loginState.isAdmin()) return;
+			
             self.editorWifi = data;
             self.editorWifiSsid(data.ssid);
             self.editorWifiPassphrase1(undefined);
@@ -199,16 +179,6 @@ $(function() {
             });
         };
 
-        self.sendStartAp = function() {
-            if (!self.loginState.isAdmin()) return;
-            self._postCommand("start_ap", {});
-        };
-
-        self.sendStopAp = function() {
-            if (!self.loginState.isAdmin()) return;
-            self._postCommand("stop_ap", {});
-        };
-
         self.sendWifiRefresh = function(force) {
             if (force === undefined) force = false;
             self._postCommand("list_wifi", {force: force}, function(response) {
@@ -217,8 +187,8 @@ $(function() {
         };
 
         self.sendWifiConfig = function(ssid, psk, successCallback, failureCallback) {
-            if (!self.loginState.isAdmin()) return;
-
+            //if (!self.loginState.isAdmin()) return;
+			
             self.working(true);
             if (self.status.connections.ap()) {
                 self.reconnectInProgress = true;
@@ -239,14 +209,8 @@ $(function() {
             }, 5000);
         };
 
-        self.sendReset = function() {
-            if (!self.loginState.isAdmin()) return;
-
-            self._postCommand("reset", {});
-        };
-
         self.sendForgetWifi = function() {
-            if (!self.loginState.isAdmin()) return;
+            //if (!self.loginState.isAdmin()) return;
             self._postCommand("forget_wifi", {});
         };
 
@@ -305,7 +269,7 @@ $(function() {
                 clearTimeout(self.pollingTimeoutId);
                 self.pollingTimeoutId = undefined;
             }
-
+			
             $.ajax({
                 url: API_BASEURL + "plugin/netconnectd",
                 type: "GET",
@@ -315,9 +279,9 @@ $(function() {
         };
 
         self.onUserLoggedIn = function(user) {
-            if (user.admin) {
+            //if (user.admin) {
                 self.requestData();
-            }
+           // }
         };
 
         self.onBeforeBinding = function() {
@@ -343,5 +307,10 @@ $(function() {
     }
 
     // view model class, parameters for constructor, container to bind to
-    ADDITIONAL_VIEWMODELS.push([NetconnectdViewModel, ["loginStateViewModel", "settingsViewModel"], "#settings_plugin_netconnectd"]);
+//ADDITIONAL_VIEWMODELS.push([NetconnectdViewModel, ["loginStateViewModel", "settingsViewModel"], "#settings_plugin_netconnectd"]);
+    OCTOPRINT_VIEWMODELS.push({
+        construct: NetconnectdViewModel,
+        dependencies: ["loginStateViewModel", "settingsViewModel"],
+        elements: ["#settings_plugin_netconnectd", "#tab_plugin_netconnectd"]
+    });
 });
