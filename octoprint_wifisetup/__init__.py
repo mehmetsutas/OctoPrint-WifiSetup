@@ -244,20 +244,18 @@ class WifisetupSettingsPlugin(octoprint.plugin.SettingsPlugin,
 
         nmcli_run = subprocess.Popen(['sudo nmcli connection delete ', ap_address], stdout=subprocess.PIPE)
         
-	def get_update_information(self):
-		return dict(
-			resource_monitor=dict(
-				displayName="Wifi Setup",
-				displayVersion=self._plugin_version,
-
-				type="github_release",
-				user="msutas",
-				repo="OctoPrint-WifiSetup",
-				current=self._plugin_version,
-
-				pip="https://github.com/msutas/OctoPrint-WifiSetup/archive/{target_version}.zip"
-			)
-		)
+    def get_update_information(self):
+        return dict(
+            resource_monitor=dict(
+                displayName="Wifi Setup",
+                displayVersion=self._plugin_version,
+                type="github_release",
+                user="msutas",
+                repo="OctoPrint-WifiSetup",
+                current=self._plugin_version,
+                pip="https://github.com/msutas/OctoPrint-WifiSetup/archive/{target_version}.zip"
+            )
+        )
 
 __plugin_name__ = "WIFI SETUP"
 __plugin_author__ = "Mehmet Sutas"
