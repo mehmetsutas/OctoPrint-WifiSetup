@@ -135,24 +135,26 @@ class WifisetupSettingsPlugin(octoprint.plugin.SettingsPlugin,
     def _get_wifi_list(self, force=False):
 #        if not Permissions.PLUGIN_OCTOPRINT_WIFISETUP_ACCESS.can():
 #            return None
-        iwlist_raw = subprocess.Popen(['sudo', '/sbin/iwlist', 'scan'], stdout=subprocess.PIPE)
+        iwlist_raw = subprocess.Popen(['sudo', 'nmcli -t -f SSID,BSSID,SIGNAL,SECURITY,ACTIVE,IN-USE dev wifi list --rescan yes'], stdout=subprocess.PIPE)
         ap_list, err = iwlist_raw.communicate()
         retcode = iwlist_raw.poll()
-        if retcode:
-            self._logger.info("Error while listing wifi: retcode = " + retcode)
+#        if retcode:
+#            self._logger.info("Error while listing wifi: retcode = " + retcode)
 
         result = []
 
         for line in ap_list.decode('utf-8').rsplit('\n'):
-            if 'Address' in line:
-                ap_address = line[29:]
-            if 'level' in line:
-                ap_quality = line[48:51]
-            if 'Encryption' in line:
-                ap_encryption = line[35:]
-            if 'ESSID' in line:
-                ap_ssid = line[27:-1]
-                result.append(dict(ssid=ap_ssid, address=ap_address, quality=ap_quality, encrypted=ap_encryption))
+        
+            lrep = line.replace("\:","-")
+
+            lsip = lrep.split(":")
+
+            ap_address = lsip[1]
+            ap_quality = lsip[2]
+            ap_encryption = lsip[3]
+            ap_ssid = lsip[0]
+
+            result.append(dict(ssid=ap_ssid, address=ap_address, quality=ap_quality, encrypted=ap_encryption))
 
         return result
         
@@ -170,63 +172,76 @@ class WifisetupSettingsPlugin(octoprint.plugin.SettingsPlugin,
         
 
     def _get_status(self):
-        mac_addr_pattern = r"[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}"
-        iwconfig_re = re.compile('ESSID:"(?P<ssid>[^"]+)".*Access Point: (?P<address>%s).*' % mac_addr_pattern , re.DOTALL)
+#        mac_addr_pattern = r"[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}:[a-fA-F0-9]{2}"
+#        iwconfig_re = re.compile('ESSID:"(?P<ssid>[^"]+)".*Access Point: (?P<address>%s).*' % mac_addr_pattern , re.DOTALL)
 
-        iwconfig_run = subprocess.Popen(['sudo', '/sbin/iwconfig', 'wlan0'], stdout=subprocess.PIPE)
+        iwconfig_run = subprocess.Popen(['sudo', 'nmcli -t -f IN-USE,SSID,BSSID dev wifi list'], stdout=subprocess.PIPE)
         iwconfig_output, err = iwconfig_run.communicate()
         retcode = iwconfig_run.poll()
-        if retcode:
-            self._logger.info("Error while checking status: retcode = " + retcode)
-            return dict(ssid=None, address=None)
+#        if retcode:
+#            self._logger.info("Error while checking status: retcode = " + retcode)
+#            return dict(ssid=None, address=None)
 
-        m = iwconfig_re.search(iwconfig_output)
-        if not m:
-            return dict(ssid=None, address=None)
+#        m = iwconfig_re.search(iwconfig_output)
+#        if not m:
+#            return dict(ssid=None, address=None)
 
-        return dict(ssid=m.group('ssid'), address=m.group('address'))
+        ap_address = None
+        ap_ssid = None
+
+        for line in iwconfig_output.decode('utf-8').rsplit('\n'):
+        
+            lrep = line.replace("\:","-")
+
+            lsip = lrep.split(":")
+
+            if lsip[0] == "*":
+                ap_address = lsip[2]
+                ap_ssid = lsip[1]
+
+        return dict(ssid=ap_ssid, address=ap_address)
 
     def _configure_and_select_wifi(self, ssid, psk, force=False):
     
-        temp_conf_file = open('/tmp/wpa_supplicant.conf.tmp', 'w')
+#        temp_conf_file = open('/tmp/wpa_supplicant.conf.tmp', 'w')
 
-        temp_conf_file.write('ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n')
-        temp_conf_file.write('update_config=1\n')
-        temp_conf_file.write('p2p_disabled=1\n')
-        temp_conf_file.write('\n')
-        temp_conf_file.write('network={\n')
-        temp_conf_file.write('    ssid="' + ssid + '"\n')
+#        temp_conf_file.write('ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n')
+#        temp_conf_file.write('update_config=1\n')
+#        temp_conf_file.write('p2p_disabled=1\n')
+#        temp_conf_file.write('\n')
+#        temp_conf_file.write('network={\n')
+#        temp_conf_file.write('    ssid="' + ssid + '"\n')
 
-        if psk == '':
-            temp_conf_file.write('    key_mgmt=NONE\n')
-        else:
-            temp_conf_file.write('    psk="' + psk + '"\n')
+#        if psk == '':
+#            temp_conf_file.write('    key_mgmt=NONE\n')
+#        else:
+#            temp_conf_file.write('    psk="' + psk + '"\n')
 
-        temp_conf_file.write('    }\n')
-        temp_conf_file.write('country=TR\n')
+#        temp_conf_file.write('    }\n')
+#        temp_conf_file.write('country=TR\n')
 
-        temp_conf_file.close
+#        temp_conf_file.close
 
-        os.system('sudo mv /tmp/wpa_supplicant.conf.tmp /etc/wpa_supplicant/wpa_supplicant.conf')
-        time.sleep(2)
-        wpacli_run = subprocess.Popen(['/sbin/wpa_cli', '-i', 'wlan0', 'reconfigure'], stdout=subprocess.PIPE) #os.system('wpa_cli -i wlan0 reconfigure')
+        os.system('sudo nmcli connection delete ' + ssid)
+        time.sleep(3)
+        os.system('sudo nmcli device wifi connect ' + ssid + 'password "' + psk + '"')
+#        wpacli_run = subprocess.Popen(['/sbin/wpa_cli', '-i', 'wlan0', 'reconfigure'], stdout=subprocess.PIPE) #os.system('wpa_cli -i wlan0 reconfigure')
 
     
     def _forget_wifi(self):
-        temp_conf_file = open('/tmp/wpa_supplicant.conf.tmp', 'w')
+        inmrun_run = subprocess.Popen(['sudo', 'nmcli -t -f IN-USE,SSID dev wifi list'], stdout=subprocess.PIPE)
+        inmconfig_output, err = inmconfig_run.communicate()
+        retcode = inmconfig_run.poll()
 
-        temp_conf_file.write('ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n')
-        temp_conf_file.write('update_config=1\n')
-        temp_conf_file.write('p2p_disabled=1\n')
-        temp_conf_file.write('\n')
-        temp_conf_file.write('country=TR\n')
-
-        temp_conf_file.close
-
-        os.system('sudo mv /tmp/wpa_supplicant.conf.tmp /etc/wpa_supplicant/wpa_supplicant.conf')
-        time.sleep(2)
+        for line in inmconfig_output.decode('utf-8').rsplit('\n'):
         
-        wpacli_run = subprocess.Popen(['/sbin/wpa_cli', '-i', 'wlan0', 'reconfigure'], stdout=subprocess.PIPE)
+            lsip = line.split(":")
+
+            if lsip[0] == "*":
+                ap_address = lsip[1]
+                break
+
+        nmcli_run = subprocess.Popen(['sudo nmcli connection delete ', ap_address], stdout=subprocess.PIPE)
         
 	def get_update_information(self):
 		return dict(
@@ -245,7 +260,7 @@ class WifisetupSettingsPlugin(octoprint.plugin.SettingsPlugin,
 
 __plugin_name__ = "WIFI SETUP"
 __plugin_author__ = "Mehmet Sutas"
-__plugin_pythoncompat__ = ">=2.7,<3"
+__plugin_pythoncompat__ = ">=2.7,<4"
 __plugin_description__ = "Setup wifi credentials"
 __plugin_disabling_discouraged__ = gettext("Without this plugin you will no longer be able to setup "
                                            "wifi credentials through Octoprint UI.")
