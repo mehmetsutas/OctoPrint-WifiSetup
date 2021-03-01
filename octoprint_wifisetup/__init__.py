@@ -4,12 +4,13 @@ import subprocess
 import os
 import time
 from threading import Thread
-import fileinput
+from builtins import dict
+#import fileinput
 import re
 
-__author__ = "Gina Häußge <osd@foosel.net>"
+__author__ = "Mehmet Sutas <msutas@gmail.com>"
 __license__ = 'GNU Affero General Public License http://www.gnu.org/licenses/agpl.html'
-__copyright__ = "Copyright (C) 2014 The OctoPrint Project - Released under terms of the AGPLv3 License"
+__copyright__ = "Copyright (C) 2021 Mehmet Sutas - Released under terms of the AGPLv3 License"
 
 
 import logging
@@ -272,7 +273,7 @@ __plugin_hooks__ = {
                         }
 def __plugin_check__():
     import sys
-    if sys.platform == 'linux2':
+    if sys.platform.startswith('linux'):
         return True
 
     logging.getLogger("octoprint.plugins." + __name__).warn("The wifisetup plugin only supports Linux")
