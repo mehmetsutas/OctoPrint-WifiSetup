@@ -18,7 +18,7 @@
         </thead>
         <tbody data-bind="foreach: listHelper.paginatedItems">
             <tr data-bind="attr: {title: name}">
-                <td class="settings_plugin_wifisetup_wifis_ssid"><span class="icon-lock" data-bind="invisible: !encrypted"></span> <span data-bind="text: ssid"></span> <small class="muted">({{ _('Address') }}: <span data-bind="text: address"></span>)</small></td>
+                <td class="settings_plugin_wifisetup_wifis_ssid"><span class="icon-lock" data-bind="invisible: !encrypted"></span> <span data-bind="text: ssid"></span></td>
                 <td class="settings_plugin_wifisetup_wifis_quality" data-bind="visible: $root.enableQualitySorting, text: qualityText"></td>
                 <td class="settings_plugin_wifisetup_wifis_action">
                     <button class="btn btn-small" data-bind="click: function() { $parent.configureWifi($data); }, css: {disabled: !$root.loginState.isUser() || $root.working() || $root.error() || $root.getEntryId($data) == $root.statusCurrentWifi()}"><i class="icon-spinner icon-spin" data-bind="visible: $root.working"></i><i class="icon-signin" data-bind="visible: !$root.working()"></i> {{ _('Connect') }}</button>

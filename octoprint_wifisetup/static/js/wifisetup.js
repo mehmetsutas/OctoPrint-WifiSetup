@@ -1,6 +1,14 @@
 $(function() {
     function WifisetupViewModel(parameters) {
         var self = this;
+        
+        self.sleep = function(ms) {
+            const date = Date.now();
+            let currentDate = null;
+            do {
+                currentDate = Date.now();
+            } while (currentDate - date < ms);
+        };
 
         self.loginState = parameters[0];
         self.settingsViewModel = parameters[1];
@@ -23,7 +31,6 @@ $(function() {
             },
             wifi: {
                 current_ssid: ko.observable(),
-                current_address: ko.observable(),
                 present: ko.observable()
             }
         };
@@ -31,11 +38,8 @@ $(function() {
 
         self.editorWifi = undefined;
         self.editorWifiSsid = ko.observable();
+        self.editorWifiSsid1 = ko.observable();
         self.editorWifiPassphrase1 = ko.observable();
-        self.editorWifiPassphrase2 = ko.observable();
-        self.editorWifiPassphraseMismatch = ko.computed(function() {
-            return self.editorWifiPassphrase1() != self.editorWifiPassphrase2();
-        });
 
         self.working = ko.observable(false);
         self.error = ko.observable(false);
@@ -47,6 +51,10 @@ $(function() {
                 text = gettext("Hata!");
             } else if (self.status.wifi.current_ssid()) {
                 text = _.sprintf(gettext("WIFI bağlantısı mevcut. (SSID \"%(ssid)s\")"), {ssid: self.status.wifi.current_ssid()});
+            } else if (self.status.connections.ap()) {
+                text = gettext("Rigid3D hotspot aktif. Şifre: 12345678");
+            } else if (!(self.status.wifi.present())) {
+                text = gettext("Wifi yayını devre dışı. Gelişmiş seçeneklerden açabilirsiniz.");
 			} else {
                 text = gettext("WIFI bağlantısı yok.");
 			}
@@ -56,7 +64,14 @@ $(function() {
         self.daemonOnline = ko.computed(function() {
             return (!(self.error()));
         });
+        
+        self.radioStatus = ko.computed(function() {
+            return self.status.wifi.present();
+        });
 
+        self.apStatus = ko.computed(function() {
+            return self.status.connections.ap();
+        });
 
         // initialize list helper
         self.listHelper = new ItemListHelper(
@@ -84,7 +99,7 @@ $(function() {
         );
 
         self.getEntryId = function(data) {
-            return "settings_plugin_wifisetup_wifi_" + md5(data.ssid);
+            return "tab_plugin_wifisetup_wifi_" + md5(data.ssid);
         };
 
         self.refresh = function() {
@@ -102,17 +117,16 @@ $(function() {
             self.hostname(response.hostname);
 
             self.status.link(false);
-            self.status.connections.ap(false);
-            self.status.connections.wifi(response.status.ssid);
-            self.status.connections.wired(false);
+            self.status.connections.ap(response.status.ap);
+            self.status.connections.wifi(response.status.wifi);
+            self.status.connections.wired(response.status.wired);
             self.status.wifi.current_ssid(response.status.ssid);
-            self.status.wifi.current_address(response.status.address);
-            self.status.wifi.present(response.wificheck);
+            self.status.wifi.present(response.wifiradio);
 			
             self.statusCurrentWifi(undefined);
-            if (response.status.ssid && response.status.address) {
+            if (response.status.ssid) {
                 _.each(response.wifis, function(wifi) {
-                    if (wifi.ssid == response.status.ssid && wifi.address.toLowerCase() == response.status.address.toLowerCase()) {
+                    if (wifi.ssid == response.status.ssid) {
                         self.statusCurrentWifi(self.getEntryId(wifi));
                     }
                 });
@@ -139,7 +153,7 @@ $(function() {
                     address: wifi.address,
                     encrypted: wifi.encrypted,
                     quality: quality,
-                    qualityText: (quality != undefined) ? "" + quality + " dBm" : undefined
+                    qualityText: (quality != undefined) ? quality : undefined
                 });
             });
 
@@ -161,22 +175,19 @@ $(function() {
             self.editorWifi = data;
             self.editorWifiSsid(data.ssid);
             self.editorWifiPassphrase1(undefined);
-            self.editorWifiPassphrase2(undefined);
             if (data.encrypted) {
-                $("#settings_plugin_wifisetup_wificonfig").modal("show");
+                $("#tab_plugin_wifisetup_wificonfig").modal("show");
             } else {
                 self.confirmWifiConfiguration();
             }
         };
-
-        self.confirmWifiConfiguration = function() {
-            self.sendWifiConfig(self.editorWifiSsid(), self.editorWifiPassphrase1(), function() {
-                self.editorWifi = undefined;
-                self.editorWifiSsid(undefined);
-                self.editorWifiPassphrase1(undefined);
-                self.editorWifiPassphrase2(undefined);
-                $("#settings_plugin_wifisetup_wificonfig").modal("hide");
-            });
+        
+        self.blindConfigureWifi = function() {
+            //if (!self.loginState.isAdmin()) return;
+			
+            self.editorWifiSsid1(undefined);
+            self.editorWifiPassphrase1(undefined);
+            $("#tab_plugin_wifisetup_blindconfig").modal("show");
         };
 
         self.sendWifiRefresh = function(force) {
@@ -186,34 +197,81 @@ $(function() {
             });
         };
 
+        self.confirmWifiConfiguration = function() {
+            self.sendWifiConfig(self.editorWifiSsid(), self.editorWifiPassphrase1(), function() {
+                self.editorWifi = undefined;
+                self.editorWifiSsid(undefined);
+                self.editorWifiPassphrase1(undefined);
+                $("#tab_plugin_wifisetup_wificonfig").modal("hide");
+            });
+//            $("#tab_plugin_wifisetup_wificonfig").modal("hide");
+            self.sleep(3000);
+            self.refresh();
+//            self.working(false);
+        };
+        
+        self.blindConfirmWifiConfiguration = function() {
+            self.sendWifiConfig(self.editorWifiSsid1(), self.editorWifiPassphrase1(), function() {
+                self.editorWifi = undefined;
+                self.editorWifiSsid(undefined);
+                self.editorWifiSsid1(undefined);
+                self.editorWifiPassphrase1(undefined);
+                $("#tab_plugin_wifisetup_blindconfig").modal("hide");
+            });
+//            $("#tab_plugin_wifisetup_blindconfig").modal("hide");
+            self.sleep(3000);
+            self.refresh();
+//            self.working(false);
+        };
+
         self.sendWifiConfig = function(ssid, psk, successCallback, failureCallback) {
             //if (!self.loginState.isAdmin()) return;
 			
             self.working(true);
-            if (self.status.connections.ap()) {
-                self.reconnectInProgress = true;
-
-                var reconnectText = gettext("OctoPrint is now switching to your configured Wifi connection and therefore shutting down the Access Point. I'm continuously trying to reach it at <strong>%(hostname)s</strong> but it might take a while. If you are not reconnected over the next couple of minutes, please try to reconnect to OctoPrint manually because then I was unable to find it myself.");
-
-                showOfflineOverlay(
-                    gettext("Reconnecting..."),
-                    _.sprintf(reconnectText, {hostname: self.hostname()}),
-                    self.tryReconnect
-                );
-            }
             self._postCommand("configure_wifi", {ssid: ssid, psk: psk}, successCallback, failureCallback, function() {
                 self.working(false);
                 if (self.reconnectInProgress) {
                     self.tryReconnect();
                 }
-            }, 5000);
+            }, 10000);
         };
 
         self.sendForgetWifi = function() {
             //if (!self.loginState.isAdmin()) return;
+            self.working(true);
             self._postCommand("forget_wifi", {});
+            self.sleep(3000);
+            self.working(false);
+            self.refresh();
         };
-
+        
+        self.radioOn = function() {
+            //if (!self.loginState.isAdmin()) return;
+            self.working(true);
+            self._postCommand("radio_on", {});
+            self.sleep(3000);
+            self.working(false);
+            self.refresh();
+        };
+        
+        self.radioOff = function() {
+            //if (!self.loginState.isAdmin()) return;
+            self.working(true);
+            self._postCommand("radio_off", {});
+            self.sleep(3000);
+            self.working(false);
+            self.refresh();
+        };
+        
+        self.apOff = function() {
+            //if (!self.loginState.isAdmin()) return;
+            self.working(true);
+            self._postCommand("ap_off", {});
+            self.sleep(3000);
+            self.working(false);
+            self.refresh();
+        };
+        
         self.tryReconnect = function() {
             var hostname = self.hostname();
 
@@ -310,6 +368,6 @@ $(function() {
     OCTOPRINT_VIEWMODELS.push({
         construct: WifisetupViewModel,
         dependencies: ["loginStateViewModel", "settingsViewModel"],
-        elements: ["#settings_plugin_wifisetup", "#tab_plugin_wifisetup"]
+        elements: ["#tab_plugin_wifisetup"]
     });
 });
